@@ -1,0 +1,46 @@
+# Migration from tdl-companion and tdl-sidecart
+
+`tdl-CompanionWulf` is the successor repository for the previous `tdl-companion` and `tdl-sidecart` work.
+
+## Repository history
+
+The final `tdl-companion` commit was merged into `tdl-CompanionWulf` as a real Git parent. Its final source commit is additionally referenced by the tag:
+
+```text
+legacy/tdl-companion-final
+```
+
+The former standalone `tdl-companion` GitHub repository was removed after its history and content were verified in the target repository.
+
+## Sidecart source
+
+The former `tdl-sidecart` 2.1.1 archive itself was not retained. Its unpacked source is stored under:
+
+```text
+legacy/tdl-sidecart-v2.1.1/
+```
+
+Those PowerShell files are reference material, not the active runtime implementation.
+
+## Porting status
+
+Already ported into the active Python package:
+
+- durable queue and event storage
+- durable CompanionWulf settings
+- operating-system locale detection
+- namespace and global transfer settings
+- chat listing
+- URL downloads with Sidecart-style transfer flags
+- include/exclude extension filters
+- safe filename template passed to `tdl`
+
+Still represented only by the legacy reference and scheduled for later native porting:
+
+- interactive chat/topic/media selector UI
+- Telegram Desktop `tdata` discovery and lease management
+- automatic isolated Telegram Desktop bootstrap
+- pre-download collision handling by size/hash
+- export-job orchestration for protected chats and topics
+
+New development should target `src/tdl_companionwulf/` and add regression tests before removing any remaining legacy dependency or reference.

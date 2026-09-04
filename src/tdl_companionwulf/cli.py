@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import locale
 import os
 import shutil
 import sqlite3
@@ -10,7 +9,18 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from .i18n import detect_language
+from .tdl import TdlOptions, build_chat_list_command, build_download_command
+
 APP_NAME = "tdl-CompanionWulf"
+
+
+class ClosingConnection(sqlite3.Connection):
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
 
 TEXT = {
     "de": {
@@ -37,16 +47,7 @@ TEXT = {
 
 
 def language() -> str:
-    candidates = []
-    try:
-        candidates.append(locale.getlocale()[0])
-    except Exception:
-        pass
-    candidates.extend([os.environ.get("LANG"), os.environ.get("LC_ALL")])
-    for value in candidates:
-        if value and str(value).lower().startswith("de"):
-            return "de"
-    return "en"
+    return detect_language(get_setting("language") or "auto")
 
 
 def tr(key: str) -> str:
@@ -69,7 +70,7 @@ def db_path() -> Path:
 
 
 def connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path())
+    conn = sqlite3.connect(db_path(), factory=ClosingConnection)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
@@ -100,12 +101,50 @@ def connect() -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     return conn
 
 
 def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def set_setting(key: str, value: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO settings(key,value,updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
+            (key, value, now()),
+        )
+        conn.commit()
+
+
+def get_setting(key: str) -> str | None:
+    with connect() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return None if row is None else str(row["value"])
+
+
+def list_settings() -> list[tuple[str, str]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT key,value FROM settings ORDER BY key").fetchall()
+    return [(str(row["key"]), str(row["value"])) for row in rows]
+
+
+def unset_setting(key: str) -> bool:
+    with connect() as conn:
+        cur = conn.execute("DELETE FROM settings WHERE key=?", (key,))
+        conn.commit()
+    return cur.rowcount > 0
 
 
 def event(conn: sqlite3.Connection, job_id: int | None, message: str, level: str = "INFO") -> None:
@@ -181,7 +220,22 @@ def next_job(conn: sqlite3.Connection) -> sqlite3.Row | None:
     ).fetchone()
 
 
-def run_next(download_dir: Path, limit: int, threads: int) -> int:
+def run_next(
+    download_dir: Path,
+    options: TdlOptions,
+    *,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    takeout: bool = False,
+    continue_download: bool = False,
+    restart_download: bool = False,
+    rewrite_ext: bool = False,
+    desc: bool = False,
+    group: bool = False,
+    skip_same: bool = True,
+    template: str = "{{ filenamify .FileName 180 }}",
+    extra_args: list[str] | None = None,
+) -> int:
     tdl = find_tdl()
     if not tdl:
         print(tr("tdl_missing"), file=sys.stderr)
@@ -199,19 +253,23 @@ def run_next(download_dir: Path, limit: int, threads: int) -> int:
         conn.commit()
         event(conn, int(job["id"]), "tdl started")
         print(f"{tr('running')} #{job['id']}: {job['url']}")
-        command = [
+        command = build_download_command(
             tdl,
-            "dl",
-            "--url",
-            str(job["url"]),
-            "--dir",
-            str(download_dir),
-            "--skip-same",
-            "--limit",
-            str(limit),
-            "--threads",
-            str(threads),
-        ]
+            options,
+            urls=[str(job["url"])],
+            directory=download_dir,
+            include=include,
+            exclude=exclude,
+            takeout=takeout,
+            continue_download=continue_download,
+            restart_download=restart_download,
+            rewrite_ext=rewrite_ext,
+            desc=desc,
+            group=group,
+            skip_same=skip_same,
+            template=template,
+            extra_args=extra_args,
+        )
         result = subprocess.run(command)
         if result.returncode == 0:
             conn.execute(
@@ -233,6 +291,47 @@ def run_next(download_dir: Path, limit: int, threads: int) -> int:
         return int(result.returncode or 1)
 
 
+def show_chats(options: TdlOptions, *, json_output: bool = False, filter_expression: str = "") -> int:
+    tdl = find_tdl()
+    if not tdl:
+        print(tr("tdl_missing"), file=sys.stderr)
+        return 2
+    command = build_chat_list_command(
+        tdl, options, json_output=json_output, filter_expression=filter_expression
+    )
+    return int(subprocess.run(command).returncode)
+
+
+def _split_csv(value: str | None) -> list[str]:
+    return [part.strip() for part in (value or "").split(",") if part.strip()]
+
+
+def _setting_int(key: str, default: int) -> int:
+    value = get_setting(key)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def options_from_args(args: argparse.Namespace) -> TdlOptions:
+    return TdlOptions(
+        namespace=getattr(args, "namespace", None) or get_setting("namespace") or "default",
+        limit=getattr(args, "limit", None) or _setting_int("limit", 2),
+        threads=getattr(args, "threads", None) or _setting_int("threads", 4),
+        delay=getattr(args, "delay", None) if getattr(args, "delay", None) is not None else _setting_int("delay", 0),
+        pool=getattr(args, "pool", None) if getattr(args, "pool", None) is not None else _setting_int("pool", 8),
+        proxy=getattr(args, "proxy", None) or get_setting("proxy") or "",
+        ntp=getattr(args, "ntp", None) or get_setting("ntp") or "",
+        reconnect_timeout=getattr(args, "reconnect_timeout", None) or get_setting("reconnect_timeout") or "",
+        storage=getattr(args, "storage", None) or get_setting("storage") or "",
+        debug=bool(getattr(args, "debug", False)),
+        disable_progress_ps=bool(getattr(args, "disable_progress_ps", False)),
+    )
+
+
 def requeue(job_id: int) -> int:
     with connect() as conn:
         cur = conn.execute(
@@ -247,21 +346,65 @@ def requeue(job_id: int) -> int:
     return 0
 
 
+def _add_tdl_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("-n", "--namespace")
+    parser.add_argument("-l", "--limit", type=int)
+    parser.add_argument("-t", "--threads", type=int)
+    parser.add_argument("--delay", type=int)
+    parser.add_argument("--pool", type=int)
+    parser.add_argument("--proxy")
+    parser.add_argument("--ntp")
+    parser.add_argument("--reconnect-timeout", dest="reconnect_timeout")
+    parser.add_argument("--storage")
+    parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--disable-progress-ps", action="store_true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdl-companionwulf")
-    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.1.0")
+    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.2.0")
     sub = parser.add_subparsers(dest="command", required=True)
+
     p = sub.add_parser("add", help="Add Telegram URLs to the SQLite queue")
     p.add_argument("urls", nargs="+")
     p.add_argument("--priority", "-p", type=int, default=50)
     sub.add_parser("queue", help="Show queued jobs")
     sub.add_parser("status", help="Show queue status summary")
+
     p = sub.add_parser("run", help="Run the next queued job with tdl")
-    p.add_argument("--dir", type=Path, default=Path.cwd() / "downloads")
-    p.add_argument("--limit", type=int, default=2)
-    p.add_argument("--threads", type=int, default=4)
+    p.add_argument("--dir", type=Path)
+    _add_tdl_options(p)
+    p.add_argument("-i", "--include")
+    p.add_argument("-e", "--exclude")
+    p.add_argument("--takeout", action="store_true")
+    p.add_argument("--continue", dest="continue_download", action="store_true")
+    p.add_argument("--restart", dest="restart_download", action="store_true")
+    p.add_argument("--rewrite-ext", action="store_true")
+    p.add_argument("--desc", action="store_true")
+    p.add_argument("--group", action="store_true")
+    p.add_argument("--template")
+    p.add_argument("--no-skip-same", action="store_true")
+    p.add_argument("--extra-arg", action="append", default=[])
+
+    p = sub.add_parser("chats", help="List Telegram chats through tdl")
+    _add_tdl_options(p)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-f", "--filter", default="")
+
     p = sub.add_parser("requeue", help="Requeue one job")
     p.add_argument("job_id", type=int)
+
+    p = sub.add_parser("config", help="Persist CompanionWulf defaults in SQLite")
+    config_sub = p.add_subparsers(dest="config_command", required=True)
+    config_sub.add_parser("list")
+    c = config_sub.add_parser("get")
+    c.add_argument("key")
+    c = config_sub.add_parser("set")
+    c.add_argument("key")
+    c.add_argument("value")
+    c = config_sub.add_parser("unset")
+    c.add_argument("key")
+
     sub.add_parser("doctor", help="Check runtime and database paths")
     return parser
 
@@ -279,9 +422,46 @@ def main() -> int:
         show_status()
         return 0
     if args.command == "run":
-        return run_next(args.dir, args.limit, args.threads)
+        if args.continue_download and args.restart_download:
+            print("--continue and --restart are mutually exclusive", file=sys.stderr)
+            return 2
+        options = options_from_args(args)
+        directory = args.dir or Path(get_setting("download_dir") or (Path.cwd() / "downloads"))
+        return run_next(
+            directory,
+            options,
+            include=_split_csv(args.include),
+            exclude=_split_csv(args.exclude),
+            takeout=args.takeout,
+            continue_download=args.continue_download,
+            restart_download=args.restart_download,
+            rewrite_ext=args.rewrite_ext,
+            desc=args.desc,
+            group=args.group,
+            skip_same=not args.no_skip_same,
+            template=args.template or "{{ filenamify .FileName 180 }}",
+            extra_args=args.extra_arg,
+        )
+    if args.command == "chats":
+        return show_chats(options_from_args(args), json_output=args.json, filter_expression=args.filter)
     if args.command == "requeue":
         return requeue(args.job_id)
+    if args.command == "config":
+        if args.config_command == "list":
+            for key, value in list_settings():
+                print(f"{key}={value}")
+            return 0
+        if args.config_command == "get":
+            value = get_setting(args.key)
+            if value is None:
+                return 1
+            print(value)
+            return 0
+        if args.config_command == "set":
+            set_setting(args.key, args.value)
+            return 0
+        if args.config_command == "unset":
+            return 0 if unset_setting(args.key) else 1
     if args.command == "doctor":
         print(f"language={language()}")
         print(f"database={db_path()}")

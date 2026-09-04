@@ -12,7 +12,11 @@ class CompanionSmokeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.local = Path(self.temp.name)
-        self.env = mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.local)}, clear=False)
+        self.env = mock.patch.dict(
+            os.environ,
+            {"LOCALAPPDATA": str(self.local), "XDG_STATE_HOME": str(self.local)},
+            clear=False,
+        )
         self.env.start()
         self.addCleanup(self.env.stop)
 
@@ -30,12 +34,37 @@ class CompanionSmokeTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(len(cli.queue_rows()), 1)
 
-    def test_database_is_created_in_local_appdata(self):
+    def test_database_is_created_in_state_directory(self):
         path = cli.db_path()
         self.assertTrue(str(path).startswith(str(self.local)))
         with cli.connect():
             pass
         self.assertTrue(path.is_file())
+
+    def test_settings_round_trip(self):
+        cli.set_setting("namespace", "family")
+        self.assertEqual(cli.get_setting("namespace"), "family")
+        self.assertEqual(dict(cli.list_settings())["namespace"], "family")
+        self.assertTrue(cli.unset_setting("namespace"))
+        self.assertIsNone(cli.get_setting("namespace"))
+
+
+# Connection lifecycle regression test.
+class ConnectionLifecycleTests(unittest.TestCase):
+    def test_connection_context_closes_database(self):
+        import sqlite3
+
+        with tempfile.TemporaryDirectory() as temp:
+            with mock.patch.dict(
+                os.environ,
+                {"LOCALAPPDATA": temp, "XDG_STATE_HOME": temp},
+                clear=False,
+            ):
+                conn = cli.connect()
+                with conn:
+                    conn.execute("SELECT 1")
+                with self.assertRaises(sqlite3.ProgrammingError):
+                    conn.execute("SELECT 1")
 
 
 if __name__ == "__main__":
