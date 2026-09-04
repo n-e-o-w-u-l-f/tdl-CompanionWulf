@@ -1,0 +1,10 @@
+tdl-sidecart v2.1.1
+
+- Native `tdl dl` is started as a real System.Diagnostics.Process.
+- stdout, stderr, and stdin are inherited from the current console.
+- No output capture or PowerShell pipeline is used for downloads.
+- tdl's native progress renderer can draw directly in the console.
+- Sidecart prints the concrete tdl PID while the process is alive.
+- Sidecart prints tdl exit code and runtime immediately after exit.
+- Windows argv quoting is preserved for paths containing spaces/quotes.
+- Existing v2.1.0 tdata lease / auto-auth behavior is retained.
