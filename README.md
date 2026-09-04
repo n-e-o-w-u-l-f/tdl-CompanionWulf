@@ -86,6 +86,28 @@ tdl-companionwulf run --namespace default --limit 4 --threads 10 --delay 2 --tak
 
 Use `--continue` or `--restart` to resume or restart a transfer; they are intentionally mutually exclusive. `--include` and `--exclude` are also mutually exclusive.
 
+Media profiles from the former Sidecart can be selected directly:
+
+```text
+tdl-companionwulf run --media audio
+tdl-companionwulf run --media audio,video
+tdl-companionwulf run --media archive,images
+```
+
+Available profiles are `archive`, `audio`, `images`, and `video`.
+
+## Export chats and topics
+
+Protected chats can be exported to JSON before downloading:
+
+```text
+tdl-companionwulf export --chat 123456789 --output export.json
+tdl-companionwulf export --chat 123456789 --topic 42 --type last --input 100 --output topic.json
+tdl-companionwulf export --chat @channel --all --with-content --output messages.json
+```
+
+`--type` accepts `time`, `id`, or `last`; `--input` follows the corresponding `tdl chat export` range format.
+
 ## Storage
 
 Windows database location:

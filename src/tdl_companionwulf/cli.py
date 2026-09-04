@@ -10,7 +10,13 @@ from datetime import datetime
 from pathlib import Path
 
 from .i18n import detect_language
-from .tdl import TdlOptions, build_chat_list_command, build_download_command
+from .media import media_extensions
+from .tdl import (
+    TdlOptions,
+    build_chat_export_command,
+    build_chat_list_command,
+    build_download_command,
+)
 
 APP_NAME = "tdl-CompanionWulf"
 
@@ -302,8 +308,48 @@ def show_chats(options: TdlOptions, *, json_output: bool = False, filter_express
     return int(subprocess.run(command).returncode)
 
 
+def export_chat(
+    options: TdlOptions,
+    *,
+    chat: str = "",
+    topic: int | None = None,
+    reply: int | None = None,
+    export_type: str = "time",
+    inputs: list[int] | None = None,
+    output: Path = Path("tdl-export.json"),
+    filter_expression: str = "",
+    all_messages: bool = False,
+    with_content: bool = False,
+    raw: bool = False,
+) -> int:
+    tdl = find_tdl()
+    if not tdl:
+        print(tr("tdl_missing"), file=sys.stderr)
+        return 2
+    output.parent.mkdir(parents=True, exist_ok=True)
+    command = build_chat_export_command(
+        tdl,
+        options,
+        chat=chat,
+        topic=topic,
+        reply=reply,
+        export_type=export_type,
+        inputs=inputs,
+        output=output,
+        filter_expression=filter_expression,
+        all_messages=all_messages,
+        with_content=with_content,
+        raw=raw,
+    )
+    return int(subprocess.run(command).returncode)
+
+
 def _split_csv(value: str | None) -> list[str]:
     return [part.strip() for part in (value or "").split(",") if part.strip()]
+
+
+def _split_int_csv(value: str | None) -> list[int]:
+    return [int(part) for part in _split_csv(value)]
 
 
 def _setting_int(key: str, default: int) -> int:
@@ -362,7 +408,7 @@ def _add_tdl_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdl-companionwulf")
-    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.2.0")
+    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.3.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("add", help="Add Telegram URLs to the SQLite queue")
@@ -376,6 +422,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tdl_options(p)
     p.add_argument("-i", "--include")
     p.add_argument("-e", "--exclude")
+    p.add_argument("--media", help="Comma-separated profiles: archive,audio,images,video")
     p.add_argument("--takeout", action="store_true")
     p.add_argument("--continue", dest="continue_download", action="store_true")
     p.add_argument("--restart", dest="restart_download", action="store_true")
@@ -390,6 +437,19 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tdl_options(p)
     p.add_argument("--json", action="store_true")
     p.add_argument("-f", "--filter", default="")
+
+    p = sub.add_parser("export", help="Export messages from a chat or topic to JSON")
+    _add_tdl_options(p)
+    p.add_argument("-c", "--chat", default="")
+    p.add_argument("--topic", type=int)
+    p.add_argument("--reply", type=int)
+    p.add_argument("-T", "--type", dest="export_type", choices=["time", "id", "last"], default="time")
+    p.add_argument("-i", "--input", default="")
+    p.add_argument("-o", "--output", type=Path, default=Path("tdl-export.json"))
+    p.add_argument("-f", "--filter", default="")
+    p.add_argument("--all", dest="all_messages", action="store_true")
+    p.add_argument("--with-content", action="store_true")
+    p.add_argument("--raw", action="store_true")
 
     p = sub.add_parser("requeue", help="Requeue one job")
     p.add_argument("job_id", type=int)
@@ -427,10 +487,13 @@ def main() -> int:
             return 2
         options = options_from_args(args)
         directory = args.dir or Path(get_setting("download_dir") or (Path.cwd() / "downloads"))
+        include = _split_csv(args.include)
+        if args.media:
+            include = list(dict.fromkeys(include + media_extensions(_split_csv(args.media))))
         return run_next(
             directory,
             options,
-            include=_split_csv(args.include),
+            include=include,
             exclude=_split_csv(args.exclude),
             takeout=args.takeout,
             continue_download=args.continue_download,
@@ -444,6 +507,20 @@ def main() -> int:
         )
     if args.command == "chats":
         return show_chats(options_from_args(args), json_output=args.json, filter_expression=args.filter)
+    if args.command == "export":
+        return export_chat(
+            options_from_args(args),
+            chat=args.chat,
+            topic=args.topic,
+            reply=args.reply,
+            export_type=args.export_type,
+            inputs=_split_int_csv(args.input),
+            output=args.output,
+            filter_expression=args.filter,
+            all_messages=args.all_messages,
+            with_content=args.with_content,
+            raw=args.raw,
+        )
     if args.command == "requeue":
         return requeue(args.job_id)
     if args.command == "config":

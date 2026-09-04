@@ -119,3 +119,43 @@ def build_download_command(
         if str(argument).strip():
             command.append(str(argument))
     return command
+
+
+def build_chat_export_command(
+    tdl_path: str,
+    options: TdlOptions,
+    *,
+    chat: str = "",
+    topic: int | None = None,
+    reply: int | None = None,
+    export_type: str = "time",
+    inputs: Iterable[int] | None = None,
+    output: str | Path = "tdl-export.json",
+    filter_expression: str = "",
+    all_messages: bool = False,
+    with_content: bool = False,
+    raw: bool = False,
+) -> list[str]:
+    if export_type not in {"time", "id", "last"}:
+        raise ValueError(f"unsupported export type: {export_type}")
+
+    command = [tdl_path, *build_global_args(options), "chat", "export"]
+    if chat:
+        command.extend(["-c", chat])
+    if filter_expression:
+        command.extend(["-f", filter_expression])
+    values = [str(value) for value in (inputs or [])]
+    if values:
+        command.extend(["-i", ",".join(values)])
+    command.extend(["-o", str(output), "-T", export_type])
+    if topic is not None:
+        command.extend(["--topic", str(topic)])
+    if reply is not None:
+        command.extend(["--reply", str(reply)])
+    if all_messages:
+        command.append("--all")
+    if with_content:
+        command.append("--with-content")
+    if raw:
+        command.append("--raw")
+    return command

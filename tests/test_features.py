@@ -85,3 +85,54 @@ class CliSurfaceTests(unittest.TestCase):
         self.assertEqual(config.config_command, "set")
         self.assertEqual(config.key, "namespace")
         self.assertEqual(config.value, "family")
+
+
+class ExportAndMediaTests(unittest.TestCase):
+    def test_builds_chat_export_command_with_topic(self):
+        from tdl_companionwulf.tdl import build_chat_export_command
+
+        command = build_chat_export_command(
+            "tdl",
+            TdlOptions(namespace="family"),
+            chat="12345",
+            topic=42,
+            export_type="last",
+            inputs=[100],
+            output="export.json",
+            all_messages=True,
+            with_content=True,
+        )
+        self.assertIn("export", command)
+        self.assertIn("12345", command)
+        self.assertIn("42", command)
+        self.assertIn("last", command)
+        self.assertIn("100", command)
+        self.assertIn("--all", command)
+        self.assertIn("--with-content", command)
+
+    def test_media_profiles_merge_without_duplicates(self):
+        from tdl_companionwulf.media import media_extensions
+
+        extensions = media_extensions(["audio", "video"])
+        self.assertIn("mp3", extensions)
+        self.assertIn("mp4", extensions)
+        self.assertEqual(len(extensions), len(set(extensions)))
+
+    def test_unknown_media_profile_fails(self):
+        from tdl_companionwulf.media import media_extensions
+
+        with self.assertRaises(ValueError):
+            media_extensions(["unknown"])
+
+    def test_parser_exposes_export_and_media_flags(self):
+        from tdl_companionwulf import cli
+
+        export = cli.build_parser().parse_args(
+            ["export", "--chat", "123", "--topic", "42", "--type", "last", "--input", "50"]
+        )
+        run = cli.build_parser().parse_args(["run", "--media", "audio,video"])
+        self.assertEqual(export.chat, "123")
+        self.assertEqual(export.topic, 42)
+        self.assertEqual(export.export_type, "last")
+        self.assertEqual(export.input, "50")
+        self.assertEqual(run.media, "audio,video")

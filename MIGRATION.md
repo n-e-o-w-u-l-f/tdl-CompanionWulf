@@ -31,7 +31,9 @@ Already ported into the active Python package:
 - operating-system locale detection
 - namespace and global transfer settings
 - chat listing
+- chat/topic JSON export orchestration
 - URL downloads with Sidecart-style transfer flags
+- Sidecart archive/audio/image/video media profiles
 - include/exclude extension filters
 - safe filename template passed to `tdl`
 

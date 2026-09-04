@@ -84,6 +84,28 @@ tdl-companionwulf run --namespace default --limit 4 --threads 10 --delay 2 --tak
 
 `--continue` und `--restart` dürfen nicht gleichzeitig verwendet werden. Dasselbe gilt für `--include` und `--exclude`.
 
+Die Medienprofile des früheren Sidecart können direkt ausgewählt werden:
+
+```text
+tdl-companionwulf run --media audio
+tdl-companionwulf run --media audio,video
+tdl-companionwulf run --media archive,images
+```
+
+Verfügbare Profile sind `archive`, `audio`, `images` und `video`.
+
+## Chats und Topics exportieren
+
+Geschützte Chats lassen sich vor dem Download als JSON exportieren:
+
+```text
+tdl-companionwulf export --chat 123456789 --output export.json
+tdl-companionwulf export --chat 123456789 --topic 42 --type last --input 100 --output topic.json
+tdl-companionwulf export --chat @channel --all --with-content --output messages.json
+```
+
+`--type` unterstützt `time`, `id` und `last`; `--input` verwendet das zugehörige Bereichsformat von `tdl chat export`.
+
 ## Datenbank
 
 Windows:
