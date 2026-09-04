@@ -32,6 +32,7 @@ Already ported into the active Python package:
 - namespace and global transfer settings
 - chat listing
 - chat/topic JSON export orchestration
+- interactive chat/topic selection and export/download wizard
 - URL downloads with Sidecart-style transfer flags
 - Sidecart archive/audio/image/video media profiles
 - include/exclude extension filters
@@ -39,10 +40,8 @@ Already ported into the active Python package:
 
 Still represented only by the legacy reference and scheduled for later native porting:
 
-- interactive chat/topic/media selector UI
 - Telegram Desktop `tdata` discovery and lease management
 - automatic isolated Telegram Desktop bootstrap
 - pre-download collision handling by size/hash
-- export-job orchestration for protected chats and topics
 
 New development should target `src/tdl_companionwulf/` and add regression tests before removing any remaining legacy dependency or reference.

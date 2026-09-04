@@ -108,6 +108,16 @@ tdl-companionwulf export --chat @channel --all --with-content --output messages.
 
 `--type` accepts `time`, `id`, or `last`; `--input` follows the corresponding `tdl chat export` range format.
 
+## Interactive wizard
+
+The Sidecart-style guided flow is available as a native cross-platform command:
+
+```text
+tdl-companionwulf wizard --dir downloads --media audio,video
+```
+
+The wizard loads chats through `tdl chat ls -o json`, accepts selections such as `1,3-5` or `all`, requests topic selections for forum chats, exports each selected chat/topic to JSON, and then downloads the selected media into safe chat/topic subdirectories.
+
 ## Storage
 
 Windows database location:

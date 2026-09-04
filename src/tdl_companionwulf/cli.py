@@ -17,6 +17,7 @@ from .tdl import (
     build_chat_list_command,
     build_download_command,
 )
+from .wizard import build_export_jobs, parse_chats_json, parse_selection, safe_component
 
 APP_NAME = "tdl-CompanionWulf"
 
@@ -378,6 +379,143 @@ def options_from_args(args: argparse.Namespace) -> TdlOptions:
     )
 
 
+def run_wizard(args: argparse.Namespace) -> int:
+    if args.continue_download and args.restart_download:
+        print("--continue and --restart are mutually exclusive", file=sys.stderr)
+        return 2
+    tdl = find_tdl()
+    if not tdl:
+        print(tr("tdl_missing"), file=sys.stderr)
+        return 2
+
+    options = options_from_args(args)
+    list_result = subprocess.run(
+        build_chat_list_command(
+            tdl, options, json_output=True, filter_expression=args.chat_filter
+        ),
+        capture_output=True,
+        text=True,
+    )
+    if list_result.returncode != 0:
+        print(list_result.stderr or list_result.stdout, file=sys.stderr)
+        return int(list_result.returncode or 1)
+    try:
+        chats = sorted(parse_chats_json(list_result.stdout), key=lambda chat: chat.name.casefold())
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if not chats:
+        print("No Telegram chats found.", file=sys.stderr)
+        return 1
+
+    print("\nChats")
+    for index, chat in enumerate(chats, 1):
+        topic_text = f" ({len(chat.topics)} Topics)" if chat.topics else ""
+        print(f"{index:>3}. {chat.name} [{chat.type}]{topic_text} ID={chat.id}")
+    try:
+        selected_chats = parse_selection(
+            input("Select chats [1,3-5 or all]: "), len(chats)
+        )
+    except (EOFError, ValueError) as exc:
+        print(f"Invalid chat selection: {exc}", file=sys.stderr)
+        return 1
+    if not selected_chats:
+        print("No chats selected.", file=sys.stderr)
+        return 1
+
+    topic_selections: dict[int, list[int]] = {}
+    try:
+        for chat_index in selected_chats:
+            chat = chats[chat_index]
+            if not chat.topics:
+                continue
+            print(f"\nTopics: {chat.name}")
+            for index, topic in enumerate(chat.topics, 1):
+                print(f"{index:>3}. {topic.title} ID={topic.id}")
+            topic_selections[chat.id] = parse_selection(
+                input("Select topics [1,3-5 or all]: "), len(chat.topics)
+            )
+        jobs = build_export_jobs(
+            chats,
+            selected_chat_indices=selected_chats,
+            topic_selections=topic_selections,
+        )
+    except (EOFError, ValueError) as exc:
+        print(f"Invalid topic selection: {exc}", file=sys.stderr)
+        return 1
+
+    media_names = _split_csv(args.media)
+    if not media_names:
+        try:
+            media_names = _split_csv(
+                input("Media [archive,audio,images,video] (audio): ").strip() or "audio"
+            )
+        except EOFError:
+            media_names = ["audio"]
+    try:
+        extensions = media_extensions(media_names)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    output_root = args.dir or Path(
+        get_setting("download_dir") or (Path.cwd() / "downloads")
+    )
+    output_root.mkdir(parents=True, exist_ok=True)
+    successes = 0
+    errors = 0
+
+    for number, job in enumerate(jobs, 1):
+        destination = output_root / safe_component(job.chat_name)
+        if job.topic_id is not None:
+            destination /= safe_component(job.topic_name)
+        destination.mkdir(parents=True, exist_ok=True)
+        suffix = str(job.topic_id) if job.topic_id is not None else "chat"
+        export_path = destination / f"{job.chat_id}_{suffix}_tdl-export.json"
+        label = job.chat_name + (f" / {job.topic_name}" if job.topic_id is not None else "")
+        print(f"\n[{number}/{len(jobs)}] Export: {label}")
+        export_result = subprocess.run(
+            build_chat_export_command(
+                tdl,
+                options,
+                chat=str(job.chat_id),
+                topic=job.topic_id,
+                output=export_path,
+            )
+        )
+        if export_result.returncode != 0 or not export_path.is_file() or export_path.stat().st_size == 0:
+            print(f"Export failed: {label}", file=sys.stderr)
+            errors += 1
+            continue
+
+        print(f"[{number}/{len(jobs)}] Download: {label}")
+        download_result = subprocess.run(
+            build_download_command(
+                tdl,
+                options,
+                files=[export_path],
+                directory=destination,
+                include=extensions,
+                takeout=args.takeout,
+                continue_download=args.continue_download,
+                restart_download=args.restart_download,
+                rewrite_ext=args.rewrite_ext,
+                desc=args.desc,
+                group=args.group,
+                skip_same=not args.no_skip_same,
+                template=args.template or "{{ filenamify .FileName 180 }}",
+                extra_args=args.extra_arg,
+            )
+        )
+        if download_result.returncode == 0:
+            successes += 1
+        else:
+            errors += 1
+
+    print(f"\nWizard complete: {successes} successful, {errors} failed, {len(jobs)} total")
+    return 0 if errors == 0 else 1
+
+
 def requeue(job_id: int) -> int:
     with connect() as conn:
         cur = conn.execute(
@@ -408,7 +546,7 @@ def _add_tdl_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdl-companionwulf")
-    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.3.0")
+    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.4.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("add", help="Add Telegram URLs to the SQLite queue")
@@ -450,6 +588,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--all", dest="all_messages", action="store_true")
     p.add_argument("--with-content", action="store_true")
     p.add_argument("--raw", action="store_true")
+
+    p = sub.add_parser("wizard", help="Interactive chat/topic export and download workflow")
+    p.add_argument("--dir", type=Path)
+    _add_tdl_options(p)
+    p.add_argument("--media", help="Comma-separated profiles: archive,audio,images,video")
+    p.add_argument("--chat-filter", default="")
+    p.add_argument("--takeout", action="store_true")
+    p.add_argument("--continue", dest="continue_download", action="store_true")
+    p.add_argument("--restart", dest="restart_download", action="store_true")
+    p.add_argument("--rewrite-ext", action="store_true")
+    p.add_argument("--desc", action="store_true")
+    p.add_argument("--group", action="store_true")
+    p.add_argument("--template")
+    p.add_argument("--no-skip-same", action="store_true")
+    p.add_argument("--extra-arg", action="append", default=[])
 
     p = sub.add_parser("requeue", help="Requeue one job")
     p.add_argument("job_id", type=int)
@@ -521,6 +674,8 @@ def main() -> int:
             with_content=args.with_content,
             raw=args.raw,
         )
+    if args.command == "wizard":
+        return run_wizard(args)
     if args.command == "requeue":
         return requeue(args.job_id)
     if args.command == "config":

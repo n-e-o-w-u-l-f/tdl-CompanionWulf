@@ -106,6 +106,16 @@ tdl-companionwulf export --chat @channel --all --with-content --output messages.
 
 `--type` unterstützt `time`, `id` und `last`; `--input` verwendet das zugehörige Bereichsformat von `tdl chat export`.
 
+## Interaktiver Assistent
+
+Der geführte Sidecart-Ablauf steht jetzt plattformübergreifend zur Verfügung:
+
+```text
+tdl-companionwulf wizard --dir downloads --media audio,video
+```
+
+Der Assistent lädt Chats über `tdl chat ls -o json`, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt bei Forum-Chats die Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic als JSON und lädt anschließend die gewählten Medien in sichere Chat-/Topic-Unterverzeichnisse.
+
 ## Datenbank
 
 Windows:

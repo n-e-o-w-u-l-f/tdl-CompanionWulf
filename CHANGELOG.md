@@ -2,6 +2,17 @@
 
 All notable changes to `tdl-CompanionWulf` are documented here.
 
+## 0.4.0 - 2026-09-04
+
+### Added
+
+- interactive cross-platform `wizard` workflow
+- typed chat/topic model for `tdl chat ls -o json` output
+- range and `all` selection parsing for chats and forum topics
+- Windows-safe chat/topic output directory normalization
+- protected chat/topic export-to-download orchestration
+- fake-`tdl` end-to-end smoke coverage for the wizard flow
+
 ## 0.3.0 - 2026-09-04
 
 ### Added
