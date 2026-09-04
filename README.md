@@ -12,9 +12,13 @@ When installed through **PSTools-InstallerWulf**, `tdl.exe` is provided through 
 
 ## Install
 
+No local Git installation is required:
+
 ```powershell
-py -3 -m pip install "git+https://github.com/n-e-o-w-u-l-f/tdl-CompanionWulf.git"
+py -3 -m pip install "https://github.com/n-e-o-w-u-l-f/tdl-CompanionWulf/archive/refs/heads/main.zip"
 ```
+
+The PSTools-InstallerWulf uses the same source-archive strategy inside an isolated virtual environment.
 
 ## Commands
 
