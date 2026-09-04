@@ -33,6 +33,10 @@ Already ported into the active Python package:
 - chat listing
 - chat/topic JSON export orchestration
 - interactive chat/topic selection and export/download wizard
+- Telegram Desktop `tdata` known-path discovery
+- namespace-to-`tdata` SQLite associations
+- exclusive process-level `tdata` lease management
+- interactive `auth auto` session import
 - URL downloads with Sidecart-style transfer flags
 - Sidecart archive/audio/image/video media profiles
 - include/exclude extension filters
@@ -40,7 +44,7 @@ Already ported into the active Python package:
 
 Still represented only by the legacy reference and scheduled for later native porting:
 
-- Telegram Desktop `tdata` discovery and lease management
+- recursive full-volume `tdata` search (intentionally not enabled by default)
 - automatic isolated Telegram Desktop bootstrap
 - pre-download collision handling by size/hash
 

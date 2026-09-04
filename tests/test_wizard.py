@@ -133,6 +133,7 @@ sys.exit(0)
                     str(output),
                     "--namespace",
                     "smoke",
+                    "--no-auto-auth",
                     "--media",
                     "audio",
                 ],
@@ -144,3 +145,11 @@ sys.exit(0)
             self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
             self.assertEqual(len(list(output.rglob("*_tdl-export.json"))), 3)
             self.assertEqual(len(log.read_text(encoding="utf-8").splitlines()), 7)
+
+
+class WizardAuthOptionTests(unittest.TestCase):
+    def test_wizard_can_disable_automatic_authentication(self):
+        from tdl_companionwulf import cli
+
+        args = cli.build_parser().parse_args(["wizard", "--no-auto-auth"])
+        self.assertTrue(args.no_auto_auth)

@@ -159,3 +159,14 @@ def build_chat_export_command(
     if raw:
         command.append("--raw")
     return command
+
+
+def build_login_command(
+    executable: str,
+    options: TdlOptions,
+    tdata_path: Path | str | None = None,
+) -> list[str]:
+    command = [executable, "login", "-n", options.namespace]
+    if tdata_path is not None:
+        command.extend(["-d", str(tdata_path)])
+    return command

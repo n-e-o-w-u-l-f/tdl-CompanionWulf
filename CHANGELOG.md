@@ -2,6 +2,24 @@
 
 All notable changes to `tdl-CompanionWulf` are documented here.
 
+## 0.5.0 - 2026-09-04
+
+### Added
+
+- cross-platform Telegram Desktop `tdata` candidate model and known-path discovery
+- exclusive OS-level `tdata` leases with process metadata
+- durable namespace-to-`tdata` associations in SQLite
+- `auth status`, `auth candidates`, `auth login`, and `auth auto` commands
+- interactive Wizard authorization check and automatic authentication fallback
+- process-lifetime lease retention for associated Wizard namespaces
+- Telegram Desktop and iGram Desktop known-path compatibility
+- login/auth integration tests using an isolated fake `tdl` executable
+
+### Safety
+
+- locked `tdata` candidates are not bypassed through native auto-detection
+- background queue execution does not invoke interactive auto-auth implicitly
+
 ## 0.4.0 - 2026-09-04
 
 ### Added

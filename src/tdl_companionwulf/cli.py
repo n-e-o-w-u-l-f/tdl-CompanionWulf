@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import os
 import shutil
 import sqlite3
@@ -16,10 +17,13 @@ from .tdl import (
     build_chat_export_command,
     build_chat_list_command,
     build_download_command,
+    build_login_command,
 )
+from .tdata import TdataLease, discover_known_tdata, canonical_tdata_path
 from .wizard import build_export_jobs, parse_chats_json, parse_selection, safe_component
 
 APP_NAME = "tdl-CompanionWulf"
+_ACTIVE_TDATA_LEASES: list[TdataLease] = []
 
 
 class ClosingConnection(sqlite3.Connection):
@@ -117,6 +121,15 @@ def connect() -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tdata_associations (
+            namespace TEXT PRIMARY KEY,
+            path TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     return conn
 
@@ -152,6 +165,58 @@ def unset_setting(key: str) -> bool:
         cur = conn.execute("DELETE FROM settings WHERE key=?", (key,))
         conn.commit()
     return cur.rowcount > 0
+
+
+def set_namespace_tdata(namespace: str, path: Path | str) -> None:
+    canonical = canonical_tdata_path(path)
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO tdata_associations(namespace,path,updated_at) VALUES(?,?,?) "
+            "ON CONFLICT(namespace) DO UPDATE SET path=excluded.path, updated_at=excluded.updated_at",
+            (namespace, str(canonical), now()),
+        )
+        conn.commit()
+
+
+def get_namespace_tdata(namespace: str) -> Path | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT path FROM tdata_associations WHERE namespace=?", (namespace,)
+        ).fetchone()
+    if row is None:
+        return None
+    path = canonical_tdata_path(str(row["path"]))
+    return path if path.is_dir() else None
+
+
+def unset_namespace_tdata(namespace: str) -> bool:
+    with connect() as conn:
+        cur = conn.execute("DELETE FROM tdata_associations WHERE namespace=?", (namespace,))
+        conn.commit()
+    return cur.rowcount > 0
+
+
+def release_active_tdata_leases() -> None:
+    while _ACTIVE_TDATA_LEASES:
+        _ACTIVE_TDATA_LEASES.pop().release()
+
+
+def hold_namespace_tdata_lease(namespace: str) -> bool:
+    associated = get_namespace_tdata(namespace)
+    if associated is None:
+        return True
+    target = os.path.normcase(str(associated))
+    for lease in _ACTIVE_TDATA_LEASES:
+        if lease.acquired and os.path.normcase(str(lease.tdata_path)) == target:
+            return True
+    lease = TdataLease(associated, data_dir() / "tdata-locks", namespace=namespace)
+    if not lease.acquire():
+        return False
+    _ACTIVE_TDATA_LEASES.append(lease)
+    return True
+
+
+atexit.register(release_active_tdata_leases)
 
 
 def event(conn: sqlite3.Connection, job_id: int | None, message: str, level: str = "INFO") -> None:
@@ -389,6 +454,22 @@ def run_wizard(args: argparse.Namespace) -> int:
         return 2
 
     options = options_from_args(args)
+    if not args.no_auto_auth:
+        try:
+            authorized, _ = probe_authorization(tdl, options)
+        except RuntimeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if not authorized:
+            code = auth_auto(options)
+            if code != 0:
+                return code
+
+    if not hold_namespace_tdata_lease(options.namespace):
+        associated = get_namespace_tdata(options.namespace)
+        print(f"tdata is already in use for namespace '{options.namespace}': {associated}", file=sys.stderr)
+        return 3
+
     list_result = subprocess.run(
         build_chat_list_command(
             tdl, options, json_output=True, filter_expression=args.chat_filter
@@ -516,6 +597,117 @@ def run_wizard(args: argparse.Namespace) -> int:
     return 0 if errors == 0 else 1
 
 
+def probe_authorization(tdl: str, options: TdlOptions) -> tuple[bool, str]:
+    result = subprocess.run(
+        build_chat_list_command(tdl, options, json_output=True),
+        capture_output=True,
+        text=True,
+    )
+    text = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+    if result.returncode == 0:
+        return True, text
+    lowered = text.casefold()
+    markers = ("not authorized", "not authenticated", "nicht authentifiziert")
+    if any(marker in lowered for marker in markers):
+        return False, text
+    raise RuntimeError(text or f"tdl exited with code {result.returncode}")
+
+
+def login_tdata(tdl: str, options: TdlOptions, tdata_path: Path) -> int:
+    candidate = canonical_tdata_path(tdata_path)
+    lease = TdataLease(candidate, data_dir() / "tdata-locks", namespace=options.namespace)
+    if not lease.acquire():
+        print(f"tdata is already in use: {candidate}", file=sys.stderr)
+        return 3
+    try:
+        result = subprocess.run(build_login_command(tdl, options, candidate))
+        if result.returncode != 0:
+            return int(result.returncode or 1)
+        authorized, _ = probe_authorization(tdl, options)
+        if not authorized:
+            return 1
+        set_namespace_tdata(options.namespace, candidate)
+        return 0
+    finally:
+        lease.release()
+
+
+def auth_candidates(namespace: str = "default") -> int:
+    associated = get_namespace_tdata(namespace)
+    extras = [associated] if associated is not None else []
+    candidates = discover_known_tdata(extra_paths=extras)
+    if not candidates:
+        print("No tdata candidates found.")
+        return 1
+    for candidate in candidates:
+        marker = "key_data" if candidate.has_key_data else "no-key_data"
+        association = " associated" if associated == candidate.path else ""
+        print(f"{candidate.path} [{marker}{association}]")
+    return 0
+
+
+def auth_status(options: TdlOptions) -> int:
+    tdl = find_tdl()
+    if not tdl:
+        print(tr("tdl_missing"), file=sys.stderr)
+        return 2
+    try:
+        authorized, text = probe_authorization(tdl, options)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print("authorized" if authorized else "not authorized")
+    if not authorized and text:
+        print(text, file=sys.stderr)
+    return 0 if authorized else 1
+
+
+def auth_auto(options: TdlOptions) -> int:
+    tdl = find_tdl()
+    if not tdl:
+        print(tr("tdl_missing"), file=sys.stderr)
+        return 2
+    try:
+        authorized, _ = probe_authorization(tdl, options)
+        if authorized:
+            print(f"Namespace '{options.namespace}' is already authorized.")
+            return 0
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    associated = get_namespace_tdata(options.namespace)
+    extras = [associated] if associated is not None else []
+    candidates = discover_known_tdata(extra_paths=extras)
+    saw_locked_candidate = False
+    for candidate in candidates:
+        if not candidate.has_key_data:
+            continue
+        print(f"Trying tdata: {candidate.path}")
+        code = login_tdata(tdl, options, candidate.path)
+        if code == 0:
+            print(f"Authorized namespace '{options.namespace}' with {candidate.path}")
+            return 0
+        if code == 3:
+            saw_locked_candidate = True
+            continue
+
+    if saw_locked_candidate:
+        print("A matching tdata candidate is already leased by another CompanionWulf process.", file=sys.stderr)
+        return 3
+
+    print("No reusable tdata candidate succeeded; trying tdl native desktop detection.")
+    result = subprocess.run(build_login_command(tdl, options))
+    if result.returncode != 0:
+        return int(result.returncode or 1)
+    try:
+        authorized, _ = probe_authorization(tdl, options)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    return 0 if authorized else 1
+
+
 def requeue(job_id: int) -> int:
     with connect() as conn:
         cur = conn.execute(
@@ -546,7 +738,7 @@ def _add_tdl_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdl-companionwulf")
-    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.4.0")
+    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.5.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("add", help="Add Telegram URLs to the SQLite queue")
@@ -594,6 +786,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tdl_options(p)
     p.add_argument("--media", help="Comma-separated profiles: archive,audio,images,video")
     p.add_argument("--chat-filter", default="")
+    p.add_argument("--no-auto-auth", action="store_true")
     p.add_argument("--takeout", action="store_true")
     p.add_argument("--continue", dest="continue_download", action="store_true")
     p.add_argument("--restart", dest="restart_download", action="store_true")
@@ -603,6 +796,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--template")
     p.add_argument("--no-skip-same", action="store_true")
     p.add_argument("--extra-arg", action="append", default=[])
+
+    p = sub.add_parser("auth", help="Inspect or import Telegram Desktop authorization")
+    auth_sub = p.add_subparsers(dest="auth_command", required=True)
+    a = auth_sub.add_parser("status", help="Check whether the namespace is authorized")
+    _add_tdl_options(a)
+    a = auth_sub.add_parser("candidates", help="List known Telegram Desktop tdata candidates")
+    a.add_argument("-n", "--namespace", default="default")
+    a = auth_sub.add_parser("login", help="Import one explicit Telegram Desktop tdata directory")
+    _add_tdl_options(a)
+    a.add_argument("--tdata", type=Path, required=True)
+    a = auth_sub.add_parser("auto", help="Try associated and known tdata candidates, then tdl native detection")
+    _add_tdl_options(a)
 
     p = sub.add_parser("requeue", help="Requeue one job")
     p.add_argument("job_id", type=int)
@@ -676,6 +881,19 @@ def main() -> int:
         )
     if args.command == "wizard":
         return run_wizard(args)
+    if args.command == "auth":
+        if args.auth_command == "status":
+            return auth_status(options_from_args(args))
+        if args.auth_command == "candidates":
+            return auth_candidates(args.namespace)
+        if args.auth_command == "login":
+            tdl = find_tdl()
+            if not tdl:
+                print(tr("tdl_missing"), file=sys.stderr)
+                return 2
+            return login_tdata(tdl, options_from_args(args), args.tdata)
+        if args.auth_command == "auto":
+            return auth_auto(options_from_args(args))
     if args.command == "requeue":
         return requeue(args.job_id)
     if args.command == "config":

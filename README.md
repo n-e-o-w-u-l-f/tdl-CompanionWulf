@@ -108,6 +108,19 @@ tdl-companionwulf export --chat @channel --all --with-content --output messages.
 
 `--type` accepts `time`, `id`, or `last`; `--input` follows the corresponding `tdl chat export` range format.
 
+## Telegram Desktop authorization
+
+CompanionWulf can inspect and import existing Telegram Desktop sessions without copying credentials into the repository:
+
+```text
+tdl-companionwulf auth status --namespace default
+tdl-companionwulf auth candidates --namespace default
+tdl-companionwulf auth login --namespace default --tdata "C:\\Users\\me\\AppData\\Roaming\\Telegram Desktop\\tdata"
+tdl-companionwulf auth auto --namespace default
+```
+
+`auth auto` first checks the current namespace, then tries its stored `tdata` association and known Telegram Desktop/iGram locations. Each candidate is protected by an exclusive OS-level lease while it is imported. The successful namespace association is stored in SQLite.
+
 ## Interactive wizard
 
 The Sidecart-style guided flow is available as a native cross-platform command:
@@ -116,7 +129,7 @@ The Sidecart-style guided flow is available as a native cross-platform command:
 tdl-companionwulf wizard --dir downloads --media audio,video
 ```
 
-The wizard loads chats through `tdl chat ls -o json`, accepts selections such as `1,3-5` or `all`, requests topic selections for forum chats, exports each selected chat/topic to JSON, and then downloads the selected media into safe chat/topic subdirectories.
+The wizard checks authorization automatically, loads chats through `tdl chat ls -o json`, accepts selections such as `1,3-5` or `all`, requests topic selections for forum chats, exports each selected chat/topic to JSON, and then downloads the selected media into safe chat/topic subdirectories. Use `--no-auto-auth` to disable the interactive authentication fallback.
 
 ## Storage
 

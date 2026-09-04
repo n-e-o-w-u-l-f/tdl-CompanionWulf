@@ -69,3 +69,38 @@ class ConnectionLifecycleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TdataAssociationTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.state = Path(self.temp.name)
+        self.env = mock.patch.dict(os.environ, {"XDG_STATE_HOME": str(self.state)}, clear=False)
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def test_namespace_tdata_round_trip(self):
+        tdata = self.state / "Telegram Desktop" / "tdata"
+        tdata.mkdir(parents=True)
+        cli.set_namespace_tdata("family", tdata)
+        self.assertEqual(cli.get_namespace_tdata("family"), tdata.resolve())
+
+
+class ActiveNamespaceLeaseTests(unittest.TestCase):
+    def test_associated_tdata_is_held_for_process_lifetime(self):
+        from tdl_companionwulf.tdata import TdataLease
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            tdata = root / "Telegram Desktop" / "tdata"
+            tdata.mkdir(parents=True)
+            with mock.patch.dict(os.environ, {"XDG_STATE_HOME": str(root / "state")}, clear=False):
+                cli.release_active_tdata_leases()
+                cli.set_namespace_tdata("family", tdata)
+                self.assertTrue(cli.hold_namespace_tdata_lease("family"))
+                competing = TdataLease(tdata, cli.data_dir() / "tdata-locks", namespace="other")
+                self.assertFalse(competing.acquire())
+                cli.release_active_tdata_leases()
+                self.assertTrue(competing.acquire())
+                competing.release()

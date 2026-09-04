@@ -106,6 +106,19 @@ tdl-companionwulf export --chat @channel --all --with-content --output messages.
 
 `--type` unterstützt `time`, `id` und `last`; `--input` verwendet das zugehörige Bereichsformat von `tdl chat export`.
 
+## Telegram-Desktop-Anmeldung
+
+CompanionWulf kann vorhandene Telegram-Desktop-Sitzungen prüfen und importieren, ohne Zugangsdaten im Repository abzulegen:
+
+```text
+tdl-companionwulf auth status --namespace default
+tdl-companionwulf auth candidates --namespace default
+tdl-companionwulf auth login --namespace default --tdata "C:\\Users\\me\\AppData\\Roaming\\Telegram Desktop\\tdata"
+tdl-companionwulf auth auto --namespace default
+```
+
+`auth auto` prüft zuerst den aktuellen Namespace und versucht danach die gespeicherte `tdata`-Zuordnung sowie bekannte Telegram-Desktop-/iGram-Pfade. Jeder Kandidat wird während des Imports durch eine exklusive Betriebssystem-Sperre geschützt. Eine erfolgreiche Namespace-Zuordnung wird in SQLite gespeichert.
+
 ## Interaktiver Assistent
 
 Der geführte Sidecart-Ablauf steht jetzt plattformübergreifend zur Verfügung:
@@ -114,7 +127,7 @@ Der geführte Sidecart-Ablauf steht jetzt plattformübergreifend zur Verfügung:
 tdl-companionwulf wizard --dir downloads --media audio,video
 ```
 
-Der Assistent lädt Chats über `tdl chat ls -o json`, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt bei Forum-Chats die Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic als JSON und lädt anschließend die gewählten Medien in sichere Chat-/Topic-Unterverzeichnisse.
+Der Assistent prüft die Anmeldung automatisch, lädt Chats über `tdl chat ls -o json`, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt bei Forum-Chats die Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic als JSON und lädt anschließend die gewählten Medien in sichere Chat-/Topic-Unterverzeichnisse. Mit `--no-auto-auth` lässt sich der interaktive Auth-Fallback abschalten.
 
 ## Datenbank
 
