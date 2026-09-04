@@ -1,0 +1,42 @@
+import os
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+from tdl_companionwulf import cli
+
+
+class CompanionSmokeTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.local = Path(self.temp.name)
+        self.env = mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.local)}, clear=False)
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def test_add_and_queue(self):
+        job_id = cli.add_url("https://t.me/example_test_entry", 75)
+        self.assertGreater(job_id, 0)
+        rows = cli.queue_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["priority"], 75)
+        self.assertEqual(rows[0]["status"], "waiting")
+
+    def test_duplicate_url_reuses_job(self):
+        first = cli.add_url("https://t.me/example_test_entry")
+        second = cli.add_url("https://t.me/example_test_entry")
+        self.assertEqual(first, second)
+        self.assertEqual(len(cli.queue_rows()), 1)
+
+    def test_database_is_created_in_local_appdata(self):
+        path = cli.db_path()
+        self.assertTrue(str(path).startswith(str(self.local)))
+        with cli.connect():
+            pass
+        self.assertTrue(path.is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()
