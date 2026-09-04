@@ -2,6 +2,23 @@
 
 All notable changes to `tdl-CompanionWulf` are documented here.
 
+## 0.6.0 - 2026-09-04
+
+### Added
+
+- pre-download protection for existing files in Wizard export jobs
+- legacy and current export-media field parsing (`file`, `file_name`, `Media.Name`)
+- remote size extraction with conservative unknown-size fallback
+- optional SHA-256 extraction and hash-first collision comparison when the export supplies a digest
+- Windows-safe media filename normalization and unique `name (n).ext` preservation
+- `wizard --no-protect-existing` opt-out
+- end-to-end regression coverage proving different-size local files survive a replacement download
+
+### Safety
+
+- files with unknown remote size/hash are never renamed speculatively
+- unreadable export metadata falls back to `tdl --skip-same` instead of blocking the download
+
 ## 0.5.0 - 2026-09-04
 
 ### Added

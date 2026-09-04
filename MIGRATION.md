@@ -41,11 +41,11 @@ Already ported into the active Python package:
 - Sidecart archive/audio/image/video media profiles
 - include/exclude extension filters
 - safe filename template passed to `tdl`
+- pre-download existing-file protection by remote hash/size when available
 
 Still represented only by the legacy reference and scheduled for later native porting:
 
 - recursive full-volume `tdata` search (intentionally not enabled by default)
 - automatic isolated Telegram Desktop bootstrap
-- pre-download collision handling by size/hash
 
 New development should target `src/tdl_companionwulf/` and add regression tests before removing any remaining legacy dependency or reference.

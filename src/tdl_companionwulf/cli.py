@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import json
 import os
 import shutil
 import sqlite3
@@ -10,6 +11,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from .collisions import prepare_existing_files
 from .i18n import detect_language
 from .media import media_extensions
 from .tdl import (
@@ -569,6 +571,16 @@ def run_wizard(args: argparse.Namespace) -> int:
             errors += 1
             continue
 
+        if not args.no_protect_existing:
+            try:
+                collision_summary = prepare_existing_files(export_path, destination)
+                if collision_summary.renamed:
+                    print(f"[{number}/{len(jobs)}] Protected existing files: {collision_summary.renamed}")
+                if collision_summary.unknown:
+                    print(f"[{number}/{len(jobs)}] Existing files with unknown remote size: {collision_summary.unknown}")
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                print(f"Collision precheck skipped: {exc}", file=sys.stderr)
+
         print(f"[{number}/{len(jobs)}] Download: {label}")
         download_result = subprocess.run(
             build_download_command(
@@ -738,7 +750,7 @@ def _add_tdl_options(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tdl-companionwulf")
-    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.5.0")
+    parser.add_argument("--version", action="version", version="tdl-CompanionWulf 0.6.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("add", help="Add Telegram URLs to the SQLite queue")
@@ -787,6 +799,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--media", help="Comma-separated profiles: archive,audio,images,video")
     p.add_argument("--chat-filter", default="")
     p.add_argument("--no-auto-auth", action="store_true")
+    p.add_argument("--no-protect-existing", action="store_true")
     p.add_argument("--takeout", action="store_true")
     p.add_argument("--continue", dest="continue_download", action="store_true")
     p.add_argument("--restart", dest="restart_download", action="store_true")

@@ -153,3 +153,67 @@ class WizardAuthOptionTests(unittest.TestCase):
 
         args = cli.build_parser().parse_args(["wizard", "--no-auto-auth"])
         self.assertTrue(args.no_auto_auth)
+
+
+class WizardCollisionOptionTests(unittest.TestCase):
+    def test_wizard_can_disable_existing_file_protection(self):
+        from tdl_companionwulf import cli
+
+        args = cli.build_parser().parse_args(["wizard", "--no-protect-existing"])
+        self.assertTrue(args.no_protect_existing)
+
+
+class WizardCollisionEndToEndTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX fake executable launcher")
+    def test_wizard_preserves_different_size_existing_file(self):
+        import stat
+        import subprocess
+        import sys
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as temp_name:
+            root = Path(temp_name)
+            fake = root / "tdl"
+            output = root / "out"
+            existing = output / "News" / "song.mp3"
+            existing.parent.mkdir(parents=True)
+            existing.write_bytes(b"old")
+            fake_code = f'''#!/usr/bin/env python3
+import pathlib, sys
+args = sys.argv[1:]
+if "chat" in args and "ls" in args:
+    print('[{{"id":10,"type":"channel","visible_name":"News"}}]')
+elif "chat" in args and "export" in args:
+    target = pathlib.Path(args[args.index("-o") + 1])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('{{"messages":[{{"file_name":"song.mp3","file_size":10}}]}}', encoding="utf-8")
+elif "dl" in args:
+    directory = pathlib.Path(args[args.index("-d") + 1])
+    (directory / "song.mp3").write_bytes(b"0123456789")
+sys.exit(0)
+'''
+            fake.write_text(fake_code, encoding="utf-8")
+            fake.chmod(fake.stat().st_mode | stat.S_IXUSR)
+            env = os.environ.copy()
+            env["PATH"] = str(root) + os.pathsep + env.get("PATH", "")
+            env["XDG_STATE_HOME"] = str(root / "state")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "tdl_companionwulf.cli",
+                    "wizard",
+                    "--dir",
+                    str(output),
+                    "--no-auto-auth",
+                    "--media",
+                    "audio",
+                ],
+                input="all\n",
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertEqual(existing.read_bytes(), b"0123456789")
+            self.assertEqual((output / "News" / "song (1).mp3").read_bytes(), b"old")

@@ -19,6 +19,7 @@ Aktuell enthalten:
 - Takeout, Fortsetzen, Neustart, Rewrite-Ext, Descending und Group
 - Include-/Exclude-Filter und Dateinamens-Templates
 - Ereignisprotokoll pro Queue-Auftrag
+- Schutz vorhandener Dateien vor einem Download
 
 ## Voraussetzungen
 
@@ -127,7 +128,7 @@ Der geführte Sidecart-Ablauf steht jetzt plattformübergreifend zur Verfügung:
 tdl-companionwulf wizard --dir downloads --media audio,video
 ```
 
-Der Assistent prüft die Anmeldung automatisch, lädt Chats über `tdl chat ls -o json`, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt bei Forum-Chats die Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic als JSON und lädt anschließend die gewählten Medien in sichere Chat-/Topic-Unterverzeichnisse. Mit `--no-auto-auth` lässt sich der interaktive Auth-Fallback abschalten.
+Der Assistent prüft die Anmeldung automatisch, lädt Chats über `tdl chat ls -o json`, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt bei Forum-Chats die Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic als JSON und lädt anschließend die gewählten Medien in sichere Chat-/Topic-Unterverzeichnisse. Mit `--no-auto-auth` lässt sich der interaktive Auth-Fallback abschalten. Vor jedem Wizard-Download schützt CompanionWulf eine vorhandene gleichnamige Datei, wenn der Export einen abweichenden SHA-256-Hash oder eine abweichende Größe liefert. Identische Dateien bleiben bestehen; bei unbekannten Remote-Metadaten greift nur `tdl --skip-same`. Mit `--no-protect-existing` lässt sich die Vorprüfung abschalten.
 
 ## Datenbank
 

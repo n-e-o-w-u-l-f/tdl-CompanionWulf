@@ -19,6 +19,7 @@ Current capabilities include:
 - takeout, resume, restart, rewrite-extension, descending and group options
 - include/exclude extension filters and filename templates
 - event history for queued jobs
+- pre-download preservation of conflicting existing files
 
 ## Requirements
 
@@ -129,7 +130,7 @@ The Sidecart-style guided flow is available as a native cross-platform command:
 tdl-companionwulf wizard --dir downloads --media audio,video
 ```
 
-The wizard checks authorization automatically, loads chats through `tdl chat ls -o json`, accepts selections such as `1,3-5` or `all`, requests topic selections for forum chats, exports each selected chat/topic to JSON, and then downloads the selected media into safe chat/topic subdirectories. Use `--no-auto-auth` to disable the interactive authentication fallback.
+The wizard checks authorization automatically, loads chats through `tdl chat ls -o json`, accepts selections such as `1,3-5` or `all`, requests topic selections for forum chats, exports each selected chat/topic to JSON, and then downloads the selected media into safe chat/topic subdirectories. Use `--no-auto-auth` to disable the interactive authentication fallback. Before each Wizard download, CompanionWulf protects an existing same-name file when the export supplies a different SHA-256 or size. A matching file stays in place; unknown remote metadata is left untouched and delegated to `tdl --skip-same`. Use `--no-protect-existing` to disable this precheck.
 
 ## Storage
 
