@@ -91,7 +91,7 @@ def file_sha256(path: Path | str) -> str:
     return digest.hexdigest()
 
 
-def extract_export_media(message: Any) -> ExportMedia | None:
+def extract_export_media(message: Any, *, max_filename_length: int = 180) -> ExportMedia | None:
     if not isinstance(message, dict):
         return None
     nested = message.get("Media") or message.get("media")
@@ -107,7 +107,11 @@ def extract_export_media(message: Any) -> ExportMedia | None:
     remote_hash = _first(message, ("sha256", "SHA256", "file_sha256", "fileSha256"))
     if remote_hash is None:
         remote_hash = _first(nested, ("sha256", "SHA256", "FileSHA256", "file_sha256"))
-    return ExportMedia(safe_filename(str(name)), _size(size), _sha256(remote_hash))
+    return ExportMedia(
+        safe_filename(str(name), max_length=max_filename_length),
+        _size(size),
+        _sha256(remote_hash),
+    )
 
 
 def _messages(payload: Any) -> list[Any]:
@@ -121,26 +125,35 @@ def _messages(payload: Any) -> list[Any]:
     return []
 
 
-def read_export_media(json_path: Path | str) -> list[ExportMedia]:
+def read_export_media(json_path: Path | str, *, max_filename_length: int = 180) -> list[ExportMedia]:
     payload = json.loads(Path(json_path).read_text(encoding="utf-8-sig"))
     result: list[ExportMedia] = []
     for message in _messages(payload):
-        media = extract_export_media(message)
+        media = extract_export_media(message, max_filename_length=max_filename_length)
         if media is not None:
             result.append(media)
     return result
 
 
-def prepare_existing_files(json_path: Path | str, directory: Path | str) -> CollisionSummary:
+def prepare_existing_files(
+    json_path: Path | str,
+    directory: Path | str,
+    *,
+    comparison: str = "hash",
+    max_filename_length: int = 180,
+) -> CollisionSummary:
+    mode = comparison.casefold()
+    if mode not in {"size", "hash"}:
+        raise ValueError("comparison must be 'size' or 'hash'")
     root = Path(directory)
     checked = same = renamed = unknown = 0
-    for media in read_export_media(json_path):
+    for media in read_export_media(json_path, max_filename_length=max_filename_length):
         target = root / media.name
         if not target.is_file():
             continue
         checked += 1
         try:
-            if media.sha256 is not None:
+            if mode == "hash" and media.sha256 is not None:
                 matches = file_sha256(target) == media.sha256
             elif media.size is not None:
                 matches = target.stat().st_size == media.size
@@ -153,12 +166,6 @@ def prepare_existing_files(json_path: Path | str, directory: Path | str) -> Coll
         if matches:
             same += 1
             continue
-        replacement = unique_renamed_path(target)
-        target.rename(replacement)
+        target.rename(unique_renamed_path(target))
         renamed += 1
-    return CollisionSummary(
-        checked=checked,
-        same=same,
-        renamed=renamed,
-        unknown=unknown,
-    )
+    return CollisionSummary(checked=checked, same=same, renamed=renamed, unknown=unknown)
