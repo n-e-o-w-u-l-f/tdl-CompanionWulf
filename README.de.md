@@ -1,47 +1,47 @@
 # tdl-CompanionWulf
 
-Persistenter SQLite-basierter Begleiter, Queue-Manager und Kommando-Layer für [tdl](https://github.com/iyear/tdl).
+Ein persistenter SQLite-basierter Begleiter, Queue-Manager, Authentifizierungshelfer und geführter Kommando-Layer für [tdl](https://github.com/iyear/tdl).
 
-**Sprache:** [English](README.md) · Deutsch
+**Version:** 1.0.0  
+**Sprachen:** [alle README-Übersetzungen](README.TRANSLATIONS.md) · [English](README.md)
 
 ## Funktionen
 
-`tdl-CompanionWulf` hält Download-Aufträge und Einstellungen unabhängig vom jeweils laufenden `tdl`-Prozess dauerhaft fest. Es verbindet die neue CompanionWulf-Datenbank mit den nützlichen Transferoptionen des früheren `tdl-sidecart`.
+`tdl-CompanionWulf` ist der native Nachfolger des früheren `tdl-sidecart` 2.1.1. Version 1.0.0 schließt die funktionale Migration ab und ersetzt PowerShell-spezifische UI-Hilfen durch eine portable Python-CLI.
 
-Aktuell enthalten:
+Enthalten sind unter anderem:
 
-- persistente SQLite-Download-Queue
-- persistente Schlüssel/Wert-Einstellungen
-- automatische Erkennung der Betriebssystemsprache
-- `tdl chat ls` inklusive JSON-Ausgabe und Filter
-- native Ausführung von `tdl dl` mit direkter Konsolenausgabe
-- Namespace, Parallelität, Delay, Pool, Proxy, NTP und Storage
-- Takeout, Fortsetzen, Neustart, Rewrite-Ext, Descending und Group
-- Include-/Exclude-Filter und Dateinamens-Templates
-- Ereignisprotokoll pro Queue-Auftrag
-- Schutz vorhandener Dateien vor einem Download
+- persistente SQLite-Queue, Events, Einstellungen und Namespace-zu-`tdata`-Zuordnungen
+- automatische Erkennung der Systemsprache plus `--language`
+- `tdl chat ls`, geschützter Chat-/Topic-Export und Download-Orchestrierung
+- interaktiver Chat-/Topic-/Medien-Assistent
+- bekannte `tdata`-Pfade und explizite rekursive Suche
+- exklusive Prozess-Leases für `tdata` und automatische Parallel-Namespaces
+- isolierter Telegram-Desktop-Portable-Bootstrap unter Windows, wenn keine Sitzung wiederverwendbar ist
+- Medienprofile für Archive, Audio, Bilder und Video
+- Sidecart-Transferoptionen wie Namespace, Limit, Threads, Delay, Pool, Proxy, NTP, Storage, Takeout, Continue/Restart, Rewrite-Ext, Descending, Group, Include/Exclude und Templates
+- expliziter `--tdl-path`, konfigurierbare Dateinamenslänge, Size-/Hash-Vergleich und `--dry-run` / `--what-if-download`
+- konservativer Schutz vorhandener kollidierender Dateien
 
 ## Voraussetzungen
 
 - Python 3.10 oder neuer
-- `tdl` im `PATH`
+- installiertes `tdl` oder ein expliziter `--tdl-path`
 - Windows 10/11, Linux oder eine andere von Python unterstützte Plattform
 
 ## Installation
 
-Ohne lokale Git-Installation unter Windows:
+Windows:
 
 ```powershell
 py -3 -m pip install "https://github.com/n-e-o-w-u-l-f/tdl-CompanionWulf/archive/refs/heads/main.zip"
 ```
 
-Unter Linux:
+Linux:
 
 ```bash
 python3 -m pip install "https://github.com/n-e-o-w-u-l-f/tdl-CompanionWulf/archive/refs/heads/main.zip"
 ```
-
-Bei Installation über **PSTools-InstallerWulf** wird `tdl.exe` aus `C:\PS\binaries` verwendet. CompanionWulf liefert keine zweite Kopie von `tdl` mit.
 
 ## Schnellstart
 
@@ -49,88 +49,51 @@ Bei Installation über **PSTools-InstallerWulf** wird `tdl.exe` aus `C:\PS\binar
 tdl-companionwulf doctor
 tdl-companionwulf add https://t.me/example/1
 tdl-companionwulf queue
+tdl-companionwulf run --dry-run
 tdl-companionwulf run
 tdl-companionwulf status
 ```
 
-Doppelte URLs werden nicht erneut angelegt. Fehlgeschlagene Jobs können mit `requeue <JOB_ID>` wieder in die Warteschlange gesetzt werden.
-
-## Dauerhafte Konfiguration
-
-Standardwerte lassen sich direkt in der CompanionWulf-Datenbank speichern:
-
-```text
-tdl-companionwulf config set namespace default
-tdl-companionwulf config set limit 4
-tdl-companionwulf config set threads 10
-tdl-companionwulf config set download_dir D:\Telegram
-tdl-companionwulf config list
-```
-
-Verwendbare Einstellungen sind unter anderem `namespace`, `limit`, `threads`, `delay`, `pool`, `proxy`, `ntp`, `reconnect_timeout`, `storage`, `download_dir` und `language`.
-
-## Chats anzeigen
-
-```text
-tdl-companionwulf chats
-tdl-companionwulf chats --json
-tdl-companionwulf chats --filter "Type contains 'channel'"
-```
-
-## Sidecart-Transferoptionen
-
-```text
-tdl-companionwulf run --namespace default --limit 4 --threads 10 --delay 2 --takeout --group --rewrite-ext
-```
-
-`--continue` und `--restart` dürfen nicht gleichzeitig verwendet werden. Dasselbe gilt für `--include` und `--exclude`.
-
-Die Medienprofile des früheren Sidecart können direkt ausgewählt werden:
-
-```text
-tdl-companionwulf run --media audio
-tdl-companionwulf run --media audio,video
-tdl-companionwulf run --media archive,images
-```
-
-Verfügbare Profile sind `archive`, `audio`, `images` und `video`.
-
-## Chats und Topics exportieren
-
-Geschützte Chats lassen sich vor dem Download als JSON exportieren:
-
-```text
-tdl-companionwulf export --chat 123456789 --output export.json
-tdl-companionwulf export --chat 123456789 --topic 42 --type last --input 100 --output topic.json
-tdl-companionwulf export --chat @channel --all --with-content --output messages.json
-```
-
-`--type` unterstützt `time`, `id` und `last`; `--input` verwendet das zugehörige Bereichsformat von `tdl chat export`.
-
-## Telegram-Desktop-Anmeldung
-
-CompanionWulf kann vorhandene Telegram-Desktop-Sitzungen prüfen und importieren, ohne Zugangsdaten im Repository abzulegen:
-
-```text
-tdl-companionwulf auth status --namespace default
-tdl-companionwulf auth candidates --namespace default
-tdl-companionwulf auth login --namespace default --tdata "C:\\Users\\me\\AppData\\Roaming\\Telegram Desktop\\tdata"
-tdl-companionwulf auth auto --namespace default
-```
-
-`auth auto` prüft zuerst den aktuellen Namespace und versucht danach die gespeicherte `tdata`-Zuordnung sowie bekannte Telegram-Desktop-/iGram-Pfade. Jeder Kandidat wird während des Imports durch eine exklusive Betriebssystem-Sperre geschützt. Eine erfolgreiche Namespace-Zuordnung wird in SQLite gespeichert.
-
-## Interaktiver Assistent
-
-Der geführte Sidecart-Ablauf steht jetzt plattformübergreifend zur Verfügung:
+## Geführter Sidecart-Ablauf
 
 ```text
 tdl-companionwulf wizard --dir downloads --media audio,video
 ```
 
-Der Assistent prüft die Anmeldung automatisch, lädt Chats über `tdl chat ls -o json`, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt bei Forum-Chats die Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic als JSON und lädt anschließend die gewählten Medien in sichere Chat-/Topic-Unterverzeichnisse. Mit `--no-auto-auth` lässt sich der interaktive Auth-Fallback abschalten. Vor jedem Wizard-Download schützt CompanionWulf eine vorhandene gleichnamige Datei, wenn der Export einen abweichenden SHA-256-Hash oder eine abweichende Größe liefert. Identische Dateien bleiben bestehen; bei unbekannten Remote-Metadaten greift nur `tdl --skip-same`. Mit `--no-protect-existing` lässt sich die Vorprüfung abschalten.
+Der Assistent prüft die Authentifizierung, listet Chats, akzeptiert Auswahlen wie `1,3-5` oder `all`, fragt Forum-Topics ab, exportiert jeden ausgewählten Chat bzw. jedes Topic, schützt kollidierende vorhandene Dateien und lädt die gewählten Medien.
 
-## Datenbank
+Nützliche Kompatibilitätsoptionen:
+
+```text
+tdl-companionwulf wizard --language de --max-filename-length 180
+tdl-companionwulf wizard --comparison hash --dry-run
+tdl-companionwulf run --tdl-path C:\Tools\tdl.exe --media audio
+tdl-companionwulf run --what-if-download
+```
+
+`--dry-run` und `--what-if-download` sind Aliase. Beim Queue-Dry-Run wird `tdl` nicht gestartet und Jobstatus, Versuche und Events bleiben unverändert.
+
+## Telegram-Desktop-Authentifizierung
+
+```text
+tdl-companionwulf auth status --namespace default
+tdl-companionwulf auth candidates --namespace default
+tdl-companionwulf auth scan C:\Users\me --max-directories 25000
+tdl-companionwulf auth auto --namespace default --scan-root C:\Telegram
+tdl-companionwulf auth login --namespace default --tdata C:\Pfad\zu\tdata
+```
+
+Unter Windows kann `auth auto` als letzten Fallback das offizielle Telegram-Desktop-Portable-Paket in einem isolierten CompanionWulf-Arbeitsverzeichnis starten. Mit `--no-bootstrap` lässt sich das abschalten.
+
+Eine vollständige rekursive Volumesuche muss ausdrücklich angefordert werden:
+
+```text
+tdl-companionwulf auth scan --all-volumes
+```
+
+Symlinks werden nicht verfolgt; Pseudo- und Systemverzeichnisse werden soweit sinnvoll übersprungen.
+
+## Speicherung
 
 Windows:
 
@@ -144,19 +107,25 @@ Linux/XDG:
 $XDG_STATE_HOME/tdl-CompanionWulf/companion.db
 ```
 
-Ohne `XDG_STATE_HOME` wird `~/.local/state` verwendet. SQLite arbeitet mit WAL-Modus und Busy-Timeout.
+Ohne `XDG_STATE_HOME` wird `~/.local/state` verwendet. SQLite läuft im WAL-Modus mit Busy-Timeout.
 
-## Sprache
+## Dokumentation
 
-Die Systemsprache wird automatisch erkannt. Unterstützt werden die Sprachcodes für Deutsch, Englisch, Französisch, Spanisch, Italienisch, Portugiesisch, Niederländisch, Polnisch, Tschechisch, Slowakisch, Ungarisch, Rumänisch, Türkisch, Russisch, Ukrainisch, Bulgarisch, Griechisch, Schwedisch, Dänisch, Norwegisch und Finnisch. Nicht separat übersetzte Texte fallen auf Englisch zurück.
+- [Erste Schritte](docs/getting-started.md)
+- [Konfiguration](docs/configuration.md)
+- [Authentifizierung und tdata](docs/authorization.md)
+- [Assistent](docs/wizard.md)
+- [Queue und Downloads](docs/queue.md)
+- [Speicherung und Parallelität](docs/storage.md)
+- [Fehlerbehebung](docs/troubleshooting.md)
+- [Architektur](ARCHITECTURE.md)
+- [Sidecart-Paritätsmatrix](PARITY.md)
+- [Migrationsnachweis](MIGRATION.md)
 
-```text
-tdl-companionwulf config set language de
-tdl-companionwulf config set language auto
-```
+`.gitbook.yaml` und `SUMMARY.md` bereiten das Repository für GitBook Git Sync vor.
 
-## Alter Sidecart
+## Legacy-Referenz
 
-Der letzte Quellstand von `tdl-sidecart` 2.1.1 liegt nur noch als Migrations- und Regressionsreferenz unter `legacy/tdl-sidecart-v2.1.1/`. Die aktive Implementierung befindet sich unter `src/tdl_companionwulf/`.
+Der letzte entpackte Sidecart-2.1.1-Quellstand bleibt unter `legacy/tdl-sidecart-v2.1.1/` als Regressions- und Historienreferenz erhalten. Er ist nicht die aktive Runtime-Implementierung.
 
-Weitere Einzelheiten stehen in [MIGRATION.md](MIGRATION.md).
+Telegram-Codes, Passwörter, Sitzungsdaten oder andere Secrets gehören niemals in dieses Repository.

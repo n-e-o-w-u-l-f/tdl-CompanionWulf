@@ -1,51 +1,39 @@
 # Migration from tdl-companion and tdl-sidecart
 
-`tdl-CompanionWulf` is the successor repository for the previous `tdl-companion` and `tdl-sidecart` work.
+`tdl-CompanionWulf` is the successor to the former `tdl-companion` repository and the `tdl-sidecart` 2.1.1 workflow.
 
 ## Repository history
 
-The final `tdl-companion` commit was merged into `tdl-CompanionWulf` as a real Git parent. Its final source commit is additionally referenced by the tag:
+The final `tdl-companion` history was merged into this repository as a real Git parent. The source endpoint was removed only after ancestry and metadata were checked. The historical source commit remains referenced by `legacy/tdl-companion-final`.
 
-```text
-legacy/tdl-companion-final
-```
-
-The former standalone `tdl-companion` GitHub repository was removed after its history and content were verified in the target repository.
-
-## Sidecart source
-
-The former `tdl-sidecart` 2.1.1 archive itself was not retained. Its unpacked source is stored under:
-
-```text
-legacy/tdl-sidecart-v2.1.1/
-```
-
-Those PowerShell files are reference material, not the active runtime implementation.
+The Sidecart ZIP itself is not tracked. Its unpacked 2.1.1 source remains under `legacy/tdl-sidecart-v2.1.1/` for regression and historical reference.
 
 ## Porting status
 
-Already ported into the active Python package:
+Version 1.0.0 completes the functional Sidecart migration. The active implementation now includes:
 
-- durable queue and event storage
-- durable CompanionWulf settings
-- operating-system locale detection
-- namespace and global transfer settings
-- chat listing
-- chat/topic JSON export orchestration
-- interactive chat/topic selection and export/download wizard
-- Telegram Desktop `tdata` known-path discovery
-- namespace-to-`tdata` SQLite associations
-- exclusive process-level `tdata` lease management
-- interactive `auth auto` session import
-- URL downloads with Sidecart-style transfer flags
-- Sidecart archive/audio/image/video media profiles
-- include/exclude extension filters
-- safe filename template passed to `tdl`
-- pre-download existing-file protection by remote hash/size when available
+- persistent queue, events, settings and namespace-to-`tdata` associations
+- system language detection and explicit language selection
+- chat listing and chat/topic export
+- guided chat/topic/media workflow
+- Sidecart media extension profiles and transfer options
+- existing-file preservation with Size/Hash comparison
+- configurable filename policy and explicit `tdl` executable path
+- `tdata` known-path discovery and explicit recursive/full-volume scanning
+- cross-process `tdata` leases and automatic parallel namespaces
+- automatic `tdl login` import and authorization probing
+- isolated Windows Telegram Desktop Portable bootstrap
+- side-effect-free dry-run behavior
 
-Still represented only by the legacy reference and scheduled for later native porting:
+## Architectural replacements
 
-- recursive full-volume `tdata` search (intentionally not enabled by default)
-- automatic isolated Telegram Desktop bootstrap
+Some Sidecart implementation details were intentionally replaced instead of translated line-for-line:
 
-New development should target `src/tdl_companionwulf/` and add regression tests before removing any remaining legacy dependency or reference.
+- PowerShell menu/rendering functions -> portable argparse CLI and wizard
+- `NonInteractive` -> the non-interactive queue `run` command
+- `NoPause` -> unnecessary; CompanionWulf does not introduce keypress pauses
+- PowerShell state files -> SQLite plus OS-level lease files
+
+See [PARITY.md](PARITY.md) for the feature mapping.
+
+New development should target `src/tdl_companionwulf/`; files under `legacy/` are reference-only.
