@@ -2,6 +2,14 @@
 
 All notable changes to `tdl-CompanionWulf` are documented here.
 
+## 1.0.1 - 2026-09-07
+
+### Fixed
+
+- force UTF-8 decoding for captured `tdl` text/JSON output on Windows instead of inheriting the ANSI code page (for example cp1252)
+- prevent `UnicodeDecodeError` reader-thread crashes that could turn Wizard `stdout` into `None` and trigger a secondary JSON `TypeError`
+- keep malformed output diagnostic-safe with replacement decoding instead of crashing the process reader
+
 ## 1.0.0 - 2026-09-07
 
 ### Added
